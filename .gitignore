@@ -1,0 +1,23 @@
+.DS_Store
+node_modules/
+.vscode/
+.env
+dist/
+build/
+*.pem
+*.crx
+.DS_Store
+coverage/
+*.log
+
+# macOS
+.DS_Store
+
+# Editor directories
+.vscode/
+.idea/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

@@ -1,0 +1,14 @@
+# Twitter Extension
+
+A simple Chrome extension for Twitter-related functionality.
+
+## Contents
+- `manifest.json` — extension manifest
+- `background.js` — background scripts
+- `popup.html` / `popup.js` — popup UI and logic
+
+## Development
+1. Load the extension in Chrome via `chrome://extensions` → `Load unpacked` and select this folder.
+
+## License
+Add a license if desired.
