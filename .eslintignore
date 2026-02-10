@@ -1,0 +1,8 @@
+node_modules/
+dist/
+build/
+assets/
+*.png
+LICENSE
+README.md
+.DS_Store

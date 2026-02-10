@@ -1,0 +1,20 @@
+{
+  "name": "twitter-extention",
+  "version": "0.1.0",
+  "description": "A Chrome extension for Twitter-related functionality",
+  "author": "nersi55",
+  "license": "MIT",
+  "scripts": {
+    "lint": "eslint . --ext .js,.html",
+    "lint:fix": "eslint . --ext .js,.html --fix",
+    "format": "prettier --write \"**/*.{js,html,json,md}\"",
+    "format:check": "prettier --check \"**/*.{js,html,json,md}\""
+  },
+  "devDependencies": {
+    "eslint": "^8.45.0",
+    "eslint-plugin-html": "^7.1.0",
+    "prettier": "^2.8.8",
+    "eslint-config-prettier": "^8.8.0",
+    "eslint-plugin-prettier": "^4.2.1"
+  }
+}
