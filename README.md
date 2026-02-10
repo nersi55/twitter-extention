@@ -11,4 +11,4 @@ A simple Chrome extension for Twitter-related functionality.
 1. Load the extension in Chrome via `chrome://extensions` → `Load unpacked` and select this folder.
 
 ## License
-Add a license if desired.
+This project is licensed under the MIT License. See the `LICENSE` file for details.
