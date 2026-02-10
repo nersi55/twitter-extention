@@ -1,5 +1,7 @@
 # Twitter Extension
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A simple Chrome extension for Twitter-related functionality.
 
 ## Contents
