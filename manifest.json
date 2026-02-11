@@ -3,16 +3,8 @@
   "name": "Custom Browser Automation",
   "version": "1.0",
   "description": "A custom Chrome extension for automating browser tasks.",
-  "permissions": [
-    "scripting",
-    "tabs",
-    "activeTab",
-    "storage"
-  ],
-  "host_permissions": [
-    "https://x.com/*",
-    "https://twitter.com/*"
-  ],
+  "permissions": ["scripting", "tabs", "activeTab", "storage"],
+  "host_permissions": ["https://x.com/*", "https://twitter.com/*"],
   "background": {
     "service_worker": "background.js"
   },
