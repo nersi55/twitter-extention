@@ -477,11 +477,41 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 try {
                   if (el.isContentEditable) {
                     el.focus();
-                    // insert text
-                    document.execCommand('selectAll', false, null);
-                    document.execCommand('insertText', false, text);
-                    el.dispatchEvent(new InputEvent('input', { bubbles: true }));
-                    return true;
+
+                    // Better insertion for Unicode: use Range + TextNode to avoid any execCommand/encoding issues
+                    try {
+                      const sel = window.getSelection();
+                      let range;
+                      if (sel && sel.rangeCount) {
+                        range = sel.getRangeAt(0);
+                      } else {
+                        range = document.createRange();
+                        range.selectNodeContents(el);
+                        range.collapse(false);
+                      }
+
+                      // delete existing selection content
+                      range.deleteContents();
+
+                      const node = document.createTextNode(text);
+                      range.insertNode(node);
+
+                      // place caret after inserted node
+                      range.setStartAfter(node);
+                      range.collapse(true);
+                      sel.removeAllRanges();
+                      sel.addRange(range);
+
+                      el.dispatchEvent(new InputEvent('input', { bubbles: true }));
+                      console.log('Inserted text via Range/TextNode');
+                      return true;
+                    } catch (errRange) {
+                      console.warn('Range/TextNode insertion failed, falling back to execCommand:', errRange);
+                      document.execCommand('selectAll', false, null);
+                      document.execCommand('insertText', false, text);
+                      el.dispatchEvent(new InputEvent('input', { bubbles: true }));
+                      return true;
+                    }
                   }
                 } catch (e) { console.warn('execCommand failed:', e); }
                 // fallback for textarea
@@ -560,6 +590,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
                     // set message (use provided messages[i] or messages[quoted] or empty)
                     const text = (messages && messages[i]) || (messages && messages[quoted]) || '';
+                    console.log('Preparing to set composer text. JSON:', JSON.stringify(text));
+                    try { console.log('Text sample:', text.slice(0,80)); console.log('Char codes:', Array.from(text).slice(0,40).map(c=>c.charCodeAt(0)).slice(0,40)); } catch(e) { console.warn('Text logging failed', e); }
                     const ok = setComposerText(composer, text);
                     if (!ok) { console.warn('Could not set composer text'); }
 
@@ -824,7 +856,9 @@ function loginToXCom(username, password) {
         chrome.tabs.onUpdated.removeListener(listener); // Remove the listener after the tab is loaded
         console.log('Login tab ready:', tab.id);
 
-        executeScriptWithRetries({
+        // wait a short moment to allow dynamic content to render before injecting
+        setTimeout(() => {
+          executeScriptWithRetries({
           target: { tabId: tab.id },
           func: async (username, password) => {
             console.log('Script injected into the page');
@@ -886,7 +920,82 @@ function loginToXCom(username, password) {
             };
 
             try {
-              const usernameField = await waitForSelector('input[name="text"]');
+              // Try multiple possible selectors and heuristics for the username input since the login page can vary.
+              const usernameSelectors = [
+                'input[name="text"]',
+                'input[name="session[username_or_email]"]',
+                'input[name="username"]',
+                'input[autocomplete="username"]',
+                'input[type="text"]',
+                'input[aria-label]'
+              ];
+              let usernameField = null;
+              let foundSelector = null;
+              // per-selector timeout increased to 20000ms to account for dynamic rendering
+              for (const sel of usernameSelectors) {
+                try {
+                  usernameField = await waitForSelector(sel, 20000);
+                  if (usernameField) {
+                    foundSelector = sel;
+                    break;
+                  }
+                } catch (e) {
+                  // ignore and try next selector
+                }
+              }
+
+              // If we still haven't found an input, try heuristics: role=textbox, aria-label keywords, visible placeholders, and contenteditable
+              if (!usernameField) {
+                // log available button texts to help debugging
+                try {
+                  const buttons = Array.from(document.querySelectorAll('div[role="button"], button')).map(b => ({ text: (b.textContent||'').trim(), role: b.getAttribute('role') }));
+                  console.log('Buttons on page:', buttons.slice(0, 30));
+                } catch (e) {
+                  /* ignore */
+                }
+
+                const roleTextbox = Array.from(document.querySelectorAll('[role="textbox"]')).find(el => el.offsetParent !== null);
+                if (roleTextbox) {
+                  usernameField = roleTextbox;
+                  foundSelector = '[role="textbox"]';
+                }
+
+                if (!usernameField) {
+                  const ariaMatch = Array.from(document.querySelectorAll('input[aria-label]')).find(i => /user|email|phone|username|account|login/i.test(i.getAttribute('aria-label')) && i.offsetParent !== null);
+                  if (ariaMatch) {
+                    usernameField = ariaMatch;
+                    foundSelector = 'input[aria-label~=username]';
+                  }
+                }
+
+                if (!usernameField) {
+                  const placeholderMatch = Array.from(document.querySelectorAll('input[placeholder]')).find(i => /user|email|phone|username|account|login/i.test(i.getAttribute('placeholder')) && i.offsetParent !== null);
+                  if (placeholderMatch) {
+                    usernameField = placeholderMatch;
+                    foundSelector = 'input[placeholder]';
+                  }
+                }
+
+                if (!usernameField) {
+                  const contentEditable = Array.from(document.querySelectorAll('[contenteditable="true"]')).find(el => el.offsetParent !== null);
+                  if (contentEditable) {
+                    usernameField = contentEditable;
+                    foundSelector = 'contenteditable';
+                  }
+                }
+              }
+              if (!usernameField) {
+                throw new Error('Timeout waiting for username field (tried selectors: ' + usernameSelectors.join(',') + ')');
+              }
+              console.log('Found username field using selector:', foundSelector);
+              // Diagnostics: print page URL and a short summary of input elements available
+              try {
+                console.log('Page URL (injected):', location.href);
+                const inputs = Array.from(document.querySelectorAll('input')).map(i => ({ name: i.getAttribute('name'), type: i.type, autocomplete: i.getAttribute('autocomplete') }));
+                console.log('Inputs on page:', inputs);
+              } catch (diagErr) {
+                console.warn('Diagnostics failed:', diagErr);
+              }
               setNativeValue(usernameField, username);
               triggerInputEvents(usernameField);
               console.log('Username filled');
@@ -929,11 +1038,17 @@ function loginToXCom(username, password) {
             }
           },
           args: [username, password]
-        }).then(() => {
-          console.log('executeScript completed');
-        }).catch(err => {
-          console.error('executeScript failed:', err && err.message);
-        });
+          }).then(() => {
+            console.log('executeScript completed');
+          }).catch(err => {
+            console.error('executeScript failed:', err);
+            try {
+              if (err && err.stack) console.error(err.stack);
+            } catch (e) {
+              // ignore
+            }
+          });
+        }, 3000);
       }
     });
   });

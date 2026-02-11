@@ -44,7 +44,10 @@ document.getElementById("like5").addEventListener("click", () => {
 
 // New: Repost 5 tweets from a given list URL
 document.getElementById('repostList').addEventListener('click', () => {
-  const listUrl = 'https://x.com/i/lists/1591905950507716608'; // default list URL (user-specified)
+  const listUrlInput = document.getElementById('listUrl');
+  const countInput = document.getElementById('count');
+  const listUrl = (listUrlInput && listUrlInput.value) || 'https://x.com/i/lists/1591905950507716608';
+  const count = parseInt((countInput && countInput.value), 10) || 5;
   // one-time result listener
   const listener = (message) => {
     if (message && message.action === 'repostListResult') {
@@ -85,21 +88,24 @@ document.getElementById('repostList').addEventListener('click', () => {
     if (pollCount > 12) clearInterval(poll); // stop after ~12s
   }, 1000);
 
-  chrome.runtime.sendMessage({ action: 'repostList', url: listUrl, count: 5 }, (response) => {
+  chrome.runtime.sendMessage({ action: 'repostList', url: listUrl, count }, (response) => {
     console.log(response.status);
   });
 });
 
 // New: Quote 5 tweets from the list with custom per-tweet messages
 document.getElementById('quoteList').addEventListener('click', () => {
-  const listUrl = 'https://x.com/i/lists/1591905950507716608';
-  const messages = [
-    '[جاوید شاه]',
-    '[#سعید_سیفی]',
-    '[«نمی‌بخشیم و فراموش نمی‌کنیم»]',
-    '[بی زارم از دین شما]',
-    '[#IranMassacre]'
-  ];
+  const listUrlInput = document.getElementById('listUrl');
+  const countInput = document.getElementById('count');
+  const messagesInput = document.getElementById('messages');
+  const listUrl = (listUrlInput && listUrlInput.value) || 'https://x.com/i/lists/1591905950507716608';
+  const count = parseInt((countInput && countInput.value), 10) || 5;
+  const rawMessages = (messagesInput && messagesInput.value) || '[Sample reply]';
+  // split lines and remove empty lines
+  let messages = rawMessages.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  if (!messages.length) messages = ['[Sample reply]'];
+  // If fewer messages than count, repeat last message to fill
+  while (messages.length < count) messages.push(messages[messages.length - 1]);
 
   const listener = (message) => {
     if (message && message.action === 'quoteListResult') {
@@ -139,7 +145,7 @@ document.getElementById('quoteList').addEventListener('click', () => {
     if (pollCount2 > 12) clearInterval(poll2);
   }, 1000);
 
-  chrome.runtime.sendMessage({ action: 'quoteList', url: listUrl, count: 5, messages }, (response) => {
+  chrome.runtime.sendMessage({ action: 'quoteList', url: listUrl, count, messages }, (response) => {
     console.log(response.status);
   });
 });
