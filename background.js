@@ -168,13 +168,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             console.log(
               'Found like candidates:',
               candidates.length,
-              candidates
-                .slice(0, 6)
-                .map(c => ({
-                  reason: c.reason,
-                  aria: c.btn && c.btn.getAttribute && c.btn.getAttribute('aria-label'),
-                  dataTest: c.el && c.el.getAttribute && c.el.getAttribute('data-testid'),
-                }))
+              candidates.slice(0, 6).map(c => ({
+                reason: c.reason,
+                aria: c.btn && c.btn.getAttribute && c.btn.getAttribute('aria-label'),
+                dataTest: c.el && c.el.getAttribute && c.el.getAttribute('data-testid'),
+              }))
             );
             return candidates;
           };
