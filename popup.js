@@ -13,7 +13,7 @@ document.getElementById("like").addEventListener("click", () => {
 // New: like 5 unliked tweets, scrolling if needed
 document.getElementById("like5").addEventListener("click", () => {
   // one-time listener to receive results from the background
-  const listener = (message, sender) => {
+  const listener = (message) => {
     if (message && message.action === 'likeManyResult') {
       try {
         if (message.error) {
