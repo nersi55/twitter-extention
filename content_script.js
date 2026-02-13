@@ -30,7 +30,7 @@
   });
 
   // Forward runtime messages (from background) to the page as events so page can subscribe
-  chrome.runtime.onMessage.addListener(function (message, sender) {
+  chrome.runtime.onMessage.addListener(function (message, _sender) {
     try {
       window.postMessage({ extensionApiEvent: true, message: message }, '*');
     } catch (e) {
