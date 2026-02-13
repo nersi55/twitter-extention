@@ -135,6 +135,10 @@ Contact / feedback
 
 If you find a bug or a case where quoting still picks multiple items for a single post, please file an issue and include the exact URL you used and the command you enqueued.
 
+Install :
+npm install express
+node local_command_server.js
+
 
 
 Qoute:
@@ -153,3 +157,10 @@ Repost
   curl -X POST http://127.0.0.1:6060/enqueue \
   -H 'Content-Type: application/json' \
   -d '{"action":"repostList","url":"https://x.com/KavehGhoreishi/status/2021520999746048145","count":1,"delaySeconds":2}'
+
+
+Queue and history
+
+curl -s http://127.0.0.1:6060/queue
+curl -s http://127.0.0.1:6060/history
+curl -i http://127.0.0.1:6060/next

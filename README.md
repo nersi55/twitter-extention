@@ -44,7 +44,9 @@ node local_command_server.js
 - Trigger a "like 5" command for a list (URL must be URL-encoded):
 
 ```
-http://127.0.0.1:6060/tw/like5tw/https%3A%2F%2Fx.com%2Fi%2Flists%2F1591905950507716608
+curl -s -X POST http://127.0.0.1:6060/enqueue \
+  -H "Content-Type: application/json" \
+  -d '{"id":"mli2b68ds6zs75","action":"likeMany","count":5,"url":"https://x.com/i/lists/1591905950507716608"}' | jq .
 ```
 
 - Other helper routes:
