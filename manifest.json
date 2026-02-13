@@ -4,10 +4,28 @@
   "version": "1.0",
   "description": "A custom Chrome extension for automating browser tasks.",
   "permissions": ["scripting", "tabs", "activeTab", "storage"],
-  "host_permissions": ["https://x.com/*", "https://twitter.com/*"],
+  "host_permissions": [
+    "https://x.com/*",
+    "https://twitter.com/*",
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },
+  "content_scripts": [
+    {
+      "matches": ["https://x.com/*", "https://twitter.com/*"],
+      "js": ["content_script.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["control_page.html", "control_page.js"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {

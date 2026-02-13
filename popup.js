@@ -43,7 +43,11 @@ document.getElementById('like5').addEventListener('click', () => {
   };
   chrome.runtime.onMessage.addListener(listener);
 
-  chrome.runtime.sendMessage({ action: 'likeMany', count: 5 }, response => {
+  const countInput = document.getElementById('count');
+  const delayInput = document.getElementById('delaySeconds');
+  const count = parseInt((countInput && countInput.value), 10) || 5;
+  const delaySeconds = parseInt((delayInput && delayInput.value), 10) || 30;
+  chrome.runtime.sendMessage({ action: 'likeMany', count, delaySeconds }, response => {
     console.log(response.status);
   });
 });
@@ -101,7 +105,9 @@ document.getElementById('repostList').addEventListener('click', () => {
     if (pollCount > 12) clearInterval(poll); // stop after ~12s
   }, 1000);
 
-  chrome.runtime.sendMessage({ action: 'repostList', url: listUrl, count }, response => {
+  const delayInput = document.getElementById('delaySeconds');
+  const delaySeconds = parseInt((delayInput && delayInput.value), 10) || 30;
+  chrome.runtime.sendMessage({ action: 'repostList', url: listUrl, count, delaySeconds }, response => {
     console.log(response.status);
   });
 });
@@ -168,7 +174,9 @@ document.getElementById('quoteList').addEventListener('click', () => {
     if (pollCount2 > 12) clearInterval(poll2);
   }, 1000);
 
-  chrome.runtime.sendMessage({ action: 'quoteList', url: listUrl, count, messages }, response => {
+  const delayInput = document.getElementById('delaySeconds');
+  const delaySeconds = parseInt((delayInput && delayInput.value), 10) || 30;
+  chrome.runtime.sendMessage({ action: 'quoteList', url: listUrl, count, messages, delaySeconds }, response => {
     console.log(response.status);
   });
 });

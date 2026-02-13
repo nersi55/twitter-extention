@@ -79,7 +79,7 @@ function executeScriptWithRetries(options, retries = 3, baseDelay = 300) {
 }
 
 // Listener for commands from popup or other scripts
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+function handleRuntimeMessage(message, sender, sendResponse) {
   if (message.action === 'navigate') {
     chrome.tabs.create({ url: message.url });
     sendResponse({ status: 'Navigated to ' + message.url });
@@ -117,15 +117,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true; // keep channel open for async sendResponse
     }
   } else if (message.action === 'likeMany') {
-    // Like up to `count` unliked tweets on the active tab, scrolling to load more if needed
-    // NOTE: we'll respond asynchronously (call sendResponse when finished) so keep channel open
-    chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
-      const tab = tabs[0];
-      executeScriptWithRetries({
-        target: { tabId: tab.id },
-        func: async count => {
+    const runOnTab = tabId => {
+      return executeScriptWithRetries({
+        target: { tabId },
+        func: async (count, delaySeconds) => {
           console.log('likeMany injected, target count=', count);
           const wait = ms => new Promise(r => setTimeout(r, ms));
+          const delayMs = (delaySeconds || 30) * 1000;
 
           const getLikeButtons = () => {
             // Multi-strategy selector to handle varying DOM structures
@@ -241,7 +239,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                   console.warn('Click did not register as liked; skipping.');
                 }
 
-                await wait(300 + Math.random() * 400);
+                // wait configured delay between actions to reduce automation detection
+                await wait(delayMs + Math.random() * 2000);
               } catch (e) {
                 console.warn('Error clicking like candidate:', e);
               }
@@ -255,7 +254,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           console.log('likeMany finished, liked:', liked, 'urls:', likedUrls);
           return { requested: count, liked, likedUrls };
         },
-        args: [message.count || 5],
+        args: [message.count || 5, message.delaySeconds || 30],
       })
         .then(results => {
           const res = results && results[0] && results[0].result;
@@ -265,7 +264,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const res = { error: err && err.message };
           deliverResult('likeManyLastResult', 'likeManyResult', res);
         });
-    });
+    };
+
+    if (message.url) {
+      chrome.tabs.create({ url: message.url }, tab => {
+        chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo) {
+          if (tabId === tab.id && changeInfo.status === 'complete') {
+            chrome.tabs.onUpdated.removeListener(listener);
+            runOnTab(tab.id).finally(() => {
+              if (!message.keepTab) chrome.tabs.remove(tab.id).catch(() => {});
+            });
+          }
+        });
+      });
+    } else {
+      chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
+        const tab = tabs && tabs[0];
+        if (!tab) {
+          sendResponse({ status: 'No active tab found' });
+          return;
+        }
+        runOnTab(tab.id);
+      });
+    }
 
     // We'll not respond immediately; the popup will receive the result via chrome.runtime.onMessage listener
     sendResponse({ status: 'likeMany started' });
@@ -283,8 +304,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
           executeScriptWithRetries({
             target: { tabId: tab.id },
-            func: async count => {
+            func: async (count, delaySeconds) => {
               const wait = ms => new Promise(r => setTimeout(r, ms));
+              const delayMs = (delaySeconds || 30) * 1000;
 
               const getRetweetButtons = () => {
                 const candidates = [];
@@ -507,7 +529,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                       console.warn('Retweet click did not register; skipping');
                     }
 
-                    await wait(300 + Math.random() * 400);
+                    // wait configured delay between actions to reduce automation detection
+                    await wait(delayMs + Math.random() * 2000);
                   } catch (e) {
                     console.warn('Error processing retweet candidate:', e);
                   }
@@ -523,7 +546,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               console.log('repostList finished, retweeted:', retweeted, 'urls:', retweetedUrls);
               return { requested: count, retweeted, retweetedUrls };
             },
-            args: [count],
+            args: [count, message.delaySeconds || 30],
           })
             .then(results => {
               const res = results && results[0] && results[0].result;
@@ -542,43 +565,95 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   } else if (message.action === 'quoteList') {
     const listUrl = message.url || 'https://x.com/i/lists/1591905950507716608';
-    const count = message.count || 5;
+    // Detect if this is a single specific post URL (contains /status/)
+    const isSinglePost = /\/status\/\d+/i.test(listUrl);
+    // For single post, force count=1; otherwise use provided count or default 5
+    const count = isSinglePost ? 1 : (message.count || 5);
     const messages = message.messages && Array.isArray(message.messages) ? message.messages : [];
 
     chrome.tabs.create({ url: listUrl }, tab => {
       chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo) {
         if (tabId === tab.id && changeInfo.status === 'complete') {
           chrome.tabs.onUpdated.removeListener(listener);
-          console.log('Repost list tab ready:', tab.id, 'url:', listUrl);
+          console.log('Quote tab ready:', tab.id, 'url:', listUrl, 'isSinglePost:', isSinglePost);
 
           executeScriptWithRetries({
             target: { tabId: tab.id },
-            func: async (count, messages) => {
+            func: async (count, messages, delaySeconds, isSinglePost) => {
               const wait = ms => new Promise(r => setTimeout(r, ms));
+              const delayMs = (delaySeconds || 30) * 1000;
 
               const getQuoteCandidates = () => {
                 const candidates = [];
-                // find like/retweet area candidates and map to their buttons
+
+                if (isSinglePost) {
+                  // For a single post page, ONLY target the main tweet's retweet button.
+                  // The main tweet is the first article on the page (replies come after).
+                  const mainArticle = document.querySelector('article[data-testid="tweet"]') || document.querySelector('article');
+
+                  if (mainArticle) {
+                    // Check for unretweet first (already retweeted/quoted)
+                    const unretweet = mainArticle.querySelector('[data-testid="unretweet"]');
+                    if (unretweet) {
+                      console.log('Single post: already retweeted/quoted — skipping');
+                      return []; // return empty so it's skipped
+                    }
+
+                    const retweet = mainArticle.querySelector('[data-testid="retweet"]');
+                    if (retweet) {
+                      const btn = retweet.closest('div[role="button"], button') || retweet;
+                      candidates.push({ el: retweet, btn, reason: 'single-post-retweet' });
+                    } else {
+                      // fallback: look for aria-label with retweet inside the main article
+                      const ariaEl = mainArticle.querySelector('[aria-label*="Retweet" i], [aria-label*="repost" i]');
+                      if (ariaEl) {
+                        const btn = ariaEl.closest('div[role="button"], button') || ariaEl;
+                        candidates.push({ el: ariaEl, btn, reason: 'single-post-aria' });
+                      }
+                    }
+                  } else {
+                    console.warn('Single post: no main article found on page');
+                  }
+
+                  console.log('Single post quote candidates:', candidates.length);
+                  return candidates;
+                }
+
+                // --- List mode: find all retweet buttons on the page ---
+                // Strategy A: data-testid="retweet" (primary)
                 Array.from(
-                  document.querySelectorAll(
-                    '[data-testid="retweet"], [data-testid="like"] , div[data-testid]'
-                  )
+                  document.querySelectorAll('[data-testid="retweet"], div[data-testid="retweet"]')
                 ).forEach(el => {
-                  const btn = el.closest('div[role="button"], button');
-                  if (btn && !candidates.some(c => c.btn === btn)) candidates.push({ el, btn });
+                  const btn = el.closest('div[role="button"], button') || el;
+                  if (btn && !candidates.some(c => c.btn === btn))
+                    candidates.push({ el, btn, reason: 'data-testid' });
                 });
-                // fallback: any div[role="button"] containing svg with 'retweet' in title
-                Array.from(document.querySelectorAll('div[role="button"] svg')).forEach(svg => {
-                  const t =
-                    svg.getAttribute('aria-label') ||
-                    (svg.querySelector('title') && svg.querySelector('title').textContent) ||
-                    '';
-                  if (/retweet|repost/i.test(t)) {
-                    const btn = svg.closest('div[role="button"], button');
+
+                // Strategy B: aria-label contains 'Retweet'
+                Array.from(document.querySelectorAll('[aria-label]')).forEach(el => {
+                  const label = el.getAttribute('aria-label') || '';
+                  if (/retweet/i.test(label)) {
+                    const btn = el.closest('div[role="button"], button') || el;
                     if (btn && !candidates.some(c => c.btn === btn))
-                      candidates.push({ el: svg, btn });
+                      candidates.push({ el, btn, reason: 'aria-label' });
                   }
                 });
+
+                // Strategy C: svg/title contains 'Retweet'
+                Array.from(document.querySelectorAll('div[role="button"] svg, button svg')).forEach(
+                  svg => {
+                    const t =
+                      svg.getAttribute('aria-label') ||
+                      (svg.querySelector('title') && svg.querySelector('title').textContent) ||
+                      '';
+                    if (/retweet|repost/i.test(t)) {
+                      const btn = svg.closest('div[role="button"], button');
+                      if (btn && !candidates.some(c => c.btn === btn))
+                        candidates.push({ el: svg, btn, reason: 'svg-title' });
+                    }
+                  }
+                );
+
                 console.log('Quote candidates:', candidates.length);
                 return candidates;
               };
@@ -702,16 +777,46 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 return false;
               };
 
+              // For single post, wait a bit more for the page to fully render
+              if (isSinglePost) {
+                await wait(2000 + Math.random() * 1000);
+
+                // Check if already quoted/retweeted before doing anything
+                const mainArticle = document.querySelector('article[data-testid="tweet"]') || document.querySelector('article');
+                if (mainArticle) {
+                  const unretweet = mainArticle.querySelector('[data-testid="unretweet"]');
+                  if (unretweet) {
+                    console.log('Single post: already retweeted/quoted — aborting');
+                    return { requested: count, quoted: 0, quotedUrls: [], alreadyQuoted: true, message: 'This post was already quoted/retweeted' };
+                  }
+                }
+              }
+
               let quoted = 0;
               const quotedUrls = [];
-              const maxScrolls = 18;
+              const maxScrolls = isSinglePost ? 0 : 18; // no scrolling for single post
               let scrollAttempts = 0;
 
-              while (quoted < count && scrollAttempts < maxScrolls) {
+              while (quoted < count && scrollAttempts <= maxScrolls) {
                 const candidates = getQuoteCandidates();
+
+                // For single post: if no candidates found, don't keep trying
+                if (isSinglePost && candidates.length === 0) {
+                  console.log('Single post: no retweet button found (may be already quoted)');
+                  break;
+                }
+
                 for (let i = 0; i < candidates.length && quoted < count; i++) {
                   const { el, btn } = candidates[i];
+                  if (!btn) continue;
                   try {
+                    // Skip if already retweeted/quoted (aria-pressed true or unretweet present)
+                    const ariaPressed = btn.getAttribute && btn.getAttribute('aria-pressed');
+                    if (ariaPressed === 'true') {
+                      console.log('Skipping candidate: aria-pressed=true (already retweeted)');
+                      continue;
+                    }
+
                     btn.scrollIntoView({ block: 'center', behavior: 'smooth' });
                     await wait(300 + Math.random() * 400);
                     btn.click(); // open menu
@@ -1355,13 +1460,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     quoted++;
                     console.log('Quoted tweet. total:', quoted, 'orig url:', url);
 
-                    await wait(300 + Math.random() * 400);
+                    // wait configured delay between actions to reduce automation detection
+                    await wait(delayMs + Math.random() * 2000);
                   } catch (e) {
                     console.warn('Error quoting candidate:', e);
                   }
                 }
 
                 if (quoted >= count) break;
+
+                // For single post, never scroll — we only care about the main tweet
+                if (isSinglePost) {
+                  console.log('Single post mode: not scrolling for more posts');
+                  break;
+                }
+
                 window.scrollBy({ top: window.innerHeight * 0.8, behavior: 'smooth' });
                 await wait(900 + Math.random() * 600);
                 scrollAttempts++;
@@ -1370,7 +1483,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               console.log('quoteList finished, quoted:', quoted, 'urls:', quotedUrls);
               return { requested: count, quoted, quotedUrls };
             },
-            args: [count, messages],
+            args: [count, messages, message.delaySeconds || 30, isSinglePost],
           })
             .then(results => {
               const res = results && results[0] && results[0].result;
@@ -1388,7 +1501,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ status: 'quoteList started' });
     return true;
   }
-});
+}
+
+chrome.runtime.onMessage.addListener(handleRuntimeMessage);
 
 // Function to navigate to x.com and log in
 function loginToXCom(username, password) {
@@ -1644,7 +1759,44 @@ function loginToXCom(username, password) {
   });
 }
 
-// Example usage
-const username = 'RMenila1281';
-const password = '1QSR@sTOEXXaOmK!';
-loginToXCom(username, password);
+// Example usage (disabled; run manually if needed)
+// const username = 'RMenila1281';
+// const password = '1QSR@sTOEXXaOmK!';
+// loginToXCom(username, password);
+
+// Poll a local server for commands (e.g. http://127.0.0.1:6060)
+// The server should provide GET /next which returns the next queued command as JSON
+// Example returned JSON: { id: "uuid", action: "likeMany", count: 5, url: "https://x.com/..." }
+function startLocalCommandPolling(options = {}) {
+  const host = options.host || 'http://127.0.0.1:6060';
+  const intervalMs = options.intervalMs || 2000;
+
+  async function pollOnce() {
+    try {
+      const res = await fetch(host + '/next', { cache: 'no-store' });
+      if (!res.ok) return;
+      const obj = await res.json();
+      if (!obj || Object.keys(obj).length === 0 || obj.empty) return;
+
+      console.log('Local command received:', obj);
+
+      try {
+        handleRuntimeMessage(obj, null, reply => {
+          console.log('Local command processed, reply:', reply);
+        });
+      } catch (handlerError) {
+        console.warn('Local command handler threw', handlerError);
+      }
+    } catch (e) {
+      // local server may be down; ignore temporarily
+    }
+  }
+
+  const id = setInterval(pollOnce, intervalMs);
+  pollOnce();
+  console.log('Started local command polling to', host, 'every', intervalMs, 'ms');
+  return () => clearInterval(id);
+}
+
+// Start polling by default (adjust host/interval as needed)
+startLocalCommandPolling({ host: 'http://127.0.0.1:6060', intervalMs: 2000 });

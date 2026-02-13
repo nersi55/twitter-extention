@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Command Control</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 16px; }
+    #status { margin-bottom: 12px; }
+    #log { white-space: pre-wrap; background: #f5f5f5; border: 1px solid #ccc; padding: 8px; height: 240px; overflow: auto; }
+    button { margin-right: 8px; }
+  </style>
+</head>
+<body>
+  <h3>Local Command Control</h3>
+  <div id="status">Idle</div>
+  <div>
+    <label>Host: <input id="host" value="http://127.0.0.1:6060" size="32" /></label>
+    <button id="start">Start polling</button>
+    <button id="stop">Stop</button>
+  </div>
+  <h4>Log</h4>
+  <div id="log"></div>
+  <script src="control_page.js"></script>
+</body>
+</html>
