@@ -6,6 +6,8 @@
   const stopBtn = document.getElementById('stop');
 
   let timer = null;
+  let keepAlivePort = null;
+  let keepAliveInterval = null;
 
   const log = (...args) => {
     const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
@@ -60,6 +62,48 @@
     });
   }
 
+  // Open a persistent port to keep the MV3 service worker alive while this page is open.
+  function ensureKeepAlive() {
+    try {
+      if (keepAlivePort) return;
+      keepAlivePort = chrome.runtime.connect({ name: 'keepAlive' });
+      keepAlivePort.onDisconnect.addListener(() => {
+        log('keepAlive port disconnected');
+        keepAlivePort = null;
+        // attempt reconnect after short delay
+        if (keepAliveInterval) {
+          clearInterval(keepAliveInterval);
+          keepAliveInterval = null;
+        }
+        setTimeout(ensureKeepAlive, 2000);
+      });
+      keepAlivePort.onMessage.addListener(msg => {
+        // no-op: just keep the port active; optionally log minimal heartbeats
+        if (msg && msg.ping) log('keepAlive pong');
+      });
+      // send periodic pings to ensure activity and detect disconnects
+      keepAliveInterval = setInterval(() => {
+        try {
+          if (keepAlivePort) keepAlivePort.postMessage({ ping: true });
+        } catch (e) {
+          log('keepAlive post failed', e && e.message);
+        }
+      }, 20000);
+      log('keepAlive port opened');
+    } catch (e) {
+      log('Failed to open keepAlive port', e && e.message);
+      keepAlivePort = null;
+    }
+  }
+
+  // Clean up port when page unloads
+  window.addEventListener('beforeunload', () => {
+    try {
+      if (keepAliveInterval) clearInterval(keepAliveInterval);
+      if (keepAlivePort) keepAlivePort.disconnect();
+    } catch (e) {}
+  });
+
   function start() {
     if (timer) return;
     statusEl.textContent = 'Polling...';
@@ -81,11 +125,18 @@
   // Listen for result messages so background.js deliverResult has a recipient
   chrome.runtime.onMessage.addListener(msg => {
     if (!msg || !msg.action) return;
-    if (msg.action === 'likeManyResult' || msg.action === 'repostListResult' || msg.action === 'quoteListResult') {
+    if (
+        msg.action === 'likeManyResult' ||
+        msg.action === 'repostListResult' ||
+        msg.action === 'quoteListResult' ||
+        msg.action === 'replyListResult'
+      ) {
       log('Result', msg.action, msg.result || msg);
     }
   });
 
   // auto-start on load
+  // open keep-alive port then start polling
+  ensureKeepAlive();
   start();
 })();

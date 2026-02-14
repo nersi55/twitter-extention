@@ -180,3 +180,70 @@ document.getElementById('quoteList').addEventListener('click', () => {
     console.log(response.status);
   });
 });
+
+// New: Reply 5 tweets from the list with custom per-tweet messages
+document.getElementById('replyList').addEventListener('click', () => {
+  const listUrlInput = document.getElementById('listUrl');
+  const countInput = document.getElementById('count');
+  const messagesInput = document.getElementById('messages');
+  const listUrl =
+    (listUrlInput && listUrlInput.value) || 'https://x.com/i/lists/1591905950507716608';
+  const count = parseInt(countInput && countInput.value, 10) || 5;
+  const rawMessages = (messagesInput && messagesInput.value) || '[Sample reply]';
+  let messages = rawMessages
+    .split(/\r?\n/)
+    .map(s => s.trim())
+    .filter(Boolean);
+  if (!messages.length) messages = ['[Sample reply]'];
+  while (messages.length < count) messages.push(messages[messages.length - 1]);
+
+  const listener = message => {
+    if (message && message.action === 'replyListResult') {
+      try {
+        if (message.error) {
+          alert('Error: ' + message.error);
+        } else if (message.result) {
+          const r = message.result;
+          const urls = (r && r.repliedUrls) || [];
+          if (urls.length) {
+            const msg =
+              'Replied to ' +
+              (r.replied || urls.length) +
+              ' of ' +
+              (r.requested || 5) +
+              ' tweets:\n\n' +
+              urls.join('\n');
+            alert(msg);
+          } else {
+            alert('No tweets were replied to.');
+          }
+        } else {
+          alert('replyList completed but no result returned');
+        }
+      } finally {
+        chrome.runtime.onMessage.removeListener(listener);
+      }
+    }
+  };
+  chrome.runtime.onMessage.addListener(listener);
+
+  // storage poll fallback
+  let pollCount = 0;
+  const poll = setInterval(() => {
+    chrome.storage.local.get('replyListLastResult', data => {
+      const res = data && data.replyListLastResult;
+      if (res) {
+        listener({ action: 'replyListResult', result: res });
+        clearInterval(poll);
+      }
+    });
+    pollCount++;
+    if (pollCount > 12) clearInterval(poll);
+  }, 1000);
+
+  const delayInput = document.getElementById('delaySeconds');
+  const delaySeconds = parseInt((delayInput && delayInput.value), 10) || 30;
+  chrome.runtime.sendMessage({ action: 'replyList', url: listUrl, count, messages, delaySeconds }, response => {
+    console.log(response.status);
+  });
+});

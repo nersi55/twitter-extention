@@ -2,6 +2,55 @@ chrome.runtime.onInstalled.addListener(() => {
   console.log('Custom Browser Automation Extension Installed');
 });
 
+// Accept a long-lived "keepAlive" port from the control page.
+// Keeping a port open prevents the MV3 service worker from being suspended while the page is open.
+chrome.runtime.onConnect.addListener(port => {
+  try {
+    if (port && port.name === 'keepAlive') {
+      console.log('keepAlive port connected');
+      port.onMessage.addListener(msg => {
+        // respond to minimal heartbeats if requested
+        if (msg && msg.ping) {
+          try {
+            port.postMessage({ pong: true });
+          } catch (e) {
+            console.warn('keepAlive postMessage failed:', e && e.message);
+          }
+        }
+      });
+      // create a periodic alarm as a fallback to wake the service worker
+      try {
+        // 1 minute is the minimum supported periodInMinutes for alarms
+        chrome.alarms.create('keepAlivePing', { periodInMinutes: 1 });
+        console.log('keepAlivePing alarm created');
+      } catch (e) {
+        console.warn('Failed to create keepAlive alarm:', e && e.message);
+      }
+      port.onDisconnect.addListener(() => {
+        console.log('keepAlive port disconnected');
+        try {
+          chrome.alarms.clear('keepAlivePing');
+        } catch (e) {}
+      });
+    }
+  } catch (e) {
+    console.warn('onConnect handler error:', e && e.message);
+  }
+});
+
+// Alarm handler: wakes service worker periodically so it can perform light tasks or extend life
+chrome.alarms && chrome.alarms.onAlarm.addListener && chrome.alarms.onAlarm.addListener(alarm => {
+  try {
+    if (!alarm) return;
+    if (alarm.name === 'keepAlivePing') {
+      console.log('keepAlivePing alarm fired');
+      // no-op; the fact this handler runs means the worker was woken. Keep it short.
+    }
+  } catch (e) {
+    console.warn('alarms.onAlarm handler error:', e && e.message);
+  }
+});
+
 // Helper to deliver results: prefer storage then runtime message; guard when storage unavailable
 function deliverResult(storageKey, messageAction, res) {
   if (
@@ -1499,6 +1548,296 @@ function handleRuntimeMessage(message, sender, sendResponse) {
     });
 
     sendResponse({ status: 'quoteList started' });
+    return true;
+  } else if (message.action === 'replyList') {
+    const listUrl = message.url || 'https://x.com/i/lists/1591905950507716608';
+    const isSinglePost = /\/status\/\d+/i.test(listUrl);
+    const count = isSinglePost ? 1 : (message.count || 5);
+    const messages = message.messages && Array.isArray(message.messages) ? message.messages : [];
+
+    chrome.tabs.create({ url: listUrl }, tab => {
+      chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo) {
+        if (tabId === tab.id && changeInfo.status === 'complete') {
+          chrome.tabs.onUpdated.removeListener(listener);
+          console.log('Reply tab ready:', tab.id, 'url:', listUrl, 'isSinglePost:', isSinglePost);
+
+          executeScriptWithRetries({
+            target: { tabId: tab.id },
+            func: async (count, messages, delaySeconds, isSinglePost) => {
+              const wait = ms => new Promise(r => setTimeout(r, ms));
+              const delayMs = (delaySeconds || 30) * 1000;
+
+              const getReplyCandidates = () => {
+                const candidates = [];
+
+                if (isSinglePost) {
+                  const mainArticle = document.querySelector('article[data-testid="tweet"]') || document.querySelector('article');
+                  if (mainArticle) {
+                    const reply = mainArticle.querySelector('[data-testid="reply"]');
+                    if (reply) {
+                      const btn = reply.closest('div[role="button"], button') || reply;
+                      candidates.push({ el: reply, btn, reason: 'single-post-reply' });
+                    } else {
+                      const ariaEl = mainArticle.querySelector('[aria-label*="Reply" i], [aria-label*="reply" i]');
+                      if (ariaEl) {
+                        const btn = ariaEl.closest('div[role="button"], button') || ariaEl;
+                        candidates.push({ el: ariaEl, btn, reason: 'single-post-aria' });
+                      }
+                    }
+                  }
+                  return candidates;
+                }
+
+                Array.from(document.querySelectorAll('[data-testid="reply"], div[data-testid="reply"]')).forEach(el => {
+                  const btn = el.closest('div[role="button"], button') || el;
+                  if (btn && !candidates.some(c => c.btn === btn)) candidates.push({ el, btn, reason: 'data-testid' });
+                });
+
+                Array.from(document.querySelectorAll('[aria-label]')).forEach(el => {
+                  const label = el.getAttribute('aria-label') || '';
+                  if (/reply/i.test(label)) {
+                    const btn = el.closest('div[role="button"], button') || el;
+                    if (btn && !candidates.some(c => c.btn === btn)) candidates.push({ el, btn, reason: 'aria-label' });
+                  }
+                });
+
+                return candidates;
+              };
+
+              const findStatusUrl = node => {
+                let cur = node;
+                while (cur) {
+                  try {
+                    const a = cur.querySelector && cur.querySelector('a[href*="/status/"]');
+                    if (a && a.getAttribute) return a.href || location.origin + a.getAttribute('href');
+                  } catch (e) {}
+                  cur = cur.parentElement;
+                }
+                const nearby = document.querySelector('a[href*="/status/"]');
+                return nearby ? nearby.href || location.origin + nearby.getAttribute('href') : null;
+              };
+
+              const waitForComposer = async (timeoutMs = 8000) =>
+                new Promise((resolve, reject) => {
+                  const start = Date.now();
+                  const timer = setInterval(() => {
+                    const composer = document.querySelector(
+                      'div[role="dialog"] [role="textbox"], div[role="textbox"][data-testid], textarea'
+                    );
+                    if (composer) {
+                      clearInterval(timer);
+                      resolve(composer);
+                      return;
+                    }
+                    if (Date.now() - start >= timeoutMs) {
+                      clearInterval(timer);
+                      reject(new Error('Composer timeout'));
+                    }
+                  }, 200);
+                });
+
+              const setComposerText = (el, text) => {
+                try {
+                  if (el.isContentEditable) {
+                    el.focus();
+                    try {
+                      const sel = window.getSelection();
+                      let range;
+                      if (sel && sel.rangeCount) {
+                        range = sel.getRangeAt(0);
+                      } else {
+                        range = document.createRange();
+                        range.selectNodeContents(el);
+                        range.collapse(false);
+                      }
+                      range.deleteContents();
+                      const node = document.createTextNode(text);
+                      range.insertNode(node);
+                      range.setStartAfter(node);
+                      range.collapse(true);
+                      sel.removeAllRanges();
+                      sel.addRange(range);
+                      el.dispatchEvent(new InputEvent('input', { bubbles: true }));
+                      return true;
+                    } catch (errRange) {
+                      try {
+                        document.execCommand('selectAll', false, null);
+                        document.execCommand('insertText', false, text);
+                        el.dispatchEvent(new InputEvent('input', { bubbles: true }));
+                        return true;
+                      } catch (e) {
+                        return false;
+                      }
+                    }
+                  }
+                } catch (e) {}
+                try {
+                  if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+                    el.value = text;
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    return true;
+                  }
+                } catch (e) {}
+                try {
+                  el.innerText = text;
+                  el.dispatchEvent(new Event('input', { bubbles: true }));
+                  return true;
+                } catch (e) {
+                  return false;
+                }
+              };
+
+              const clickButtonByText = text => {
+                const nodes = Array.from(document.querySelectorAll('div[role="menuitem"], div[role="menu"] button, div[role="button"], button'));
+                const match = nodes.find(n => n.textContent && n.textContent.trim() && new RegExp('\\b' + text + '\\b', 'i').test(n.textContent.trim()));
+                if (match) {
+                  match.click();
+                  return true;
+                }
+                return false;
+              };
+
+              if (isSinglePost) {
+                await wait(1500 + Math.random() * 800);
+              }
+
+              let replied = 0;
+              const repliedUrls = [];
+              const maxScrolls = isSinglePost ? 0 : 18;
+              let scrollAttempts = 0;
+
+              while (replied < count && scrollAttempts <= maxScrolls) {
+                const candidates = getReplyCandidates();
+                if (isSinglePost && candidates.length === 0) break;
+
+                for (let i = 0; i < candidates.length && replied < count; i++) {
+                  const { el, btn } = candidates[i];
+                  if (!btn) continue;
+                  try {
+                    btn.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                    await wait(300 + Math.random() * 400);
+                    btn.click();
+                    await wait(300 + Math.random() * 500);
+
+                    let composer;
+                    try {
+                      composer = await waitForComposer(8000);
+                    } catch (e) {
+                      console.warn('Composer did not appear for reply:', e);
+                      continue;
+                    }
+
+                    const text = (messages && messages[i]) || (messages && messages[replied]) || '';
+                    const ok = setComposerText(composer, text);
+                    if (!ok) {
+                      console.warn('Could not set composer text for reply');
+                    }
+
+                    // handle Who can reply dialog similar to quote flow
+                    try {
+                      const dialogs = Array.from(document.querySelectorAll('div[role="dialog"], div[role="menu"]'));
+                      const whoDialog = dialogs.find(d => /Who can reply/i.test(d.textContent || ''));
+                      if (whoDialog) {
+                        let everyoneBtn = whoDialog.querySelector('[aria-label*="Everyone" i]');
+                        if (!everyoneBtn) {
+                          everyoneBtn = Array.from(whoDialog.querySelectorAll('div[role="button"], button')).find(n => /Everyone/i.test(n.textContent || n.getAttribute('aria-label') || ''));
+                        }
+                        if (everyoneBtn) {
+                          try { everyoneBtn.click(); } catch (e) {}
+                          await wait(300 + Math.random() * 300);
+                        }
+                        const doneBtn = Array.from(whoDialog.querySelectorAll('div[role="button"], button')).find(n => /Done|Apply|Close|Save|OK/i.test(n.textContent || ''));
+                        if (doneBtn) {
+                          try { doneBtn.click(); } catch (e) {}
+                          await wait(200 + Math.random() * 300);
+                        }
+                      }
+                    } catch (e) { console.warn('Error handling Who dialog (reply):', e); }
+
+                    // post the reply
+                    let posted = false;
+                    try {
+                      composer.focus();
+                    } catch (e) {}
+                    // try Cmd/Ctrl+Enter
+                    try {
+                      composer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true }));
+                      composer.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', metaKey: true, bubbles: true }));
+                      await wait(400 + Math.random() * 300);
+                      const still = document.querySelector('div[role="dialog"] [role="textbox"], div[role="textbox"][data-testid], textarea');
+                      if (!still) posted = true;
+                    } catch (e) {}
+
+                    if (!posted) {
+                      try {
+                        composer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }));
+                        composer.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', ctrlKey: true, bubbles: true }));
+                        await wait(400 + Math.random() * 300);
+                        const still2 = document.querySelector('div[role="dialog"] [role="textbox"], div[role="textbox"][data-testid], textarea');
+                        if (!still2) posted = true;
+                      } catch (e) {}
+                    }
+
+                    if (!posted) {
+                      // try clicking Post/Tweet/Reply button
+                      const composerDialog = composer && composer.closest ? composer.closest('div[role="dialog"]') : null;
+                      let postBtn = null;
+                      const btnMatcher = /\b(Reply|Post|Tweet)\b/i;
+                      if (composerDialog) {
+                        postBtn = Array.from(composerDialog.querySelectorAll('div[role="button"], button')).find(n => n.textContent && btnMatcher.test(n.textContent.trim()));
+                      }
+                      if (!postBtn) {
+                        const tweetButtons = Array.from(document.querySelectorAll('div[role="button"], button')).filter(n => n.textContent && btnMatcher.test(n.textContent.trim()));
+                        postBtn = tweetButtons.find(b => /Reply|Tweet|Post/i.test(b.textContent)) || tweetButtons[0];
+                      }
+                      if (postBtn) {
+                        try { postBtn.click(); } catch (e) { try { postBtn.dispatchEvent(new MouseEvent('click', { bubbles: true })); } catch (e2) {} }
+                        await wait(400 + Math.random() * 500);
+                        const still3 = document.querySelector('div[role="dialog"] [role="textbox"], div[role="textbox"][data-testid], textarea');
+                        if (!still3) posted = true;
+                      }
+                    }
+
+                    if (!posted) {
+                      console.warn('Posting reply did not succeed; skipping candidate');
+                      continue;
+                    }
+
+                    await wait(800 + Math.random() * 700);
+                    const url = findStatusUrl(btn) || findStatusUrl(el);
+                    if (url) repliedUrls.push(url);
+                    replied++;
+                    await wait(delayMs + Math.random() * 2000);
+                  } catch (e) {
+                    console.warn('Error replying to candidate:', e);
+                  }
+                }
+
+                if (replied >= count) break;
+                if (isSinglePost) break;
+                window.scrollBy({ top: window.innerHeight * 0.8, behavior: 'smooth' });
+                await wait(900 + Math.random() * 600);
+                scrollAttempts++;
+              }
+
+              return { requested: count, replied, repliedUrls };
+            },
+            args: [count, messages, message.delaySeconds || 30, isSinglePost],
+          })
+            .then(results => {
+              const res = results && results[0] && results[0].result;
+              console.log('replyList result:', res);
+              deliverResult('replyListLastResult', 'replyListResult', res);
+            })
+            .catch(err => {
+              const res = { error: err && err.message };
+              deliverResult('replyListLastResult', 'replyListResult', res);
+            });
+        }
+      });
+    });
+
+    sendResponse({ status: 'replyList started' });
     return true;
   }
 }
