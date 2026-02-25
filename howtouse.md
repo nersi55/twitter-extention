@@ -99,6 +99,17 @@ curl -X POST http://127.0.0.1:6060/enqueue \
   -d '{"action":"quoteList","url":"https://x.com/SomeUser/status/1234567890123456789","messages":["Nice!"]}'
 ```
 
+### Auto-closing tabs
+
+You can now use `closeDelayMinutes` to automatically close the tab after the task is finished.
+
+```bash
+# Close tab 2 minutes after finishing likeMany
+curl -X POST http://127.0.0.1:6060/enqueue \
+  -H 'Content-Type: application/json' \
+  -d '{"action":"likeMany","count":5,"delaySeconds":10,"closeDelayMinutes":2}'
+```
+
 What the command does (single-post flow)
 - Opens the specified URL in a new tab.
 - Waits for the page to load and ensures the main `article` element is rendered.
@@ -152,6 +163,7 @@ Like
 curl -X POST http://127.0.0.1:6060/enqueue \
   -H 'Content-Type: application/json' \
   -d '{"action":"likeMany","url":"https://x.com/KavehGhoreishi/status/2021520999746048145","count":1,"delaySeconds":2,"keepTab":true}'
+You can also add `"keepTab": true` to `repostList`, `quoteList`, or `replyList` commands when you need to keep the temporary tab open for debugging; leave it out or set it to `false` to let the extension close the tab automatically.
 Repost
 
   curl -X POST http://127.0.0.1:6060/enqueue \

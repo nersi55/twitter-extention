@@ -49,12 +49,16 @@ curl -s -X POST http://127.0.0.1:6060/enqueue \
   -d '{"id":"mli2b68ds6zs75","action":"likeMany","count":5,"url":"https://x.com/i/lists/1591905950507716608"}' | jq .
 ```
 
+- To close the tab automatically after the action finishes, add `"closeDelayMinutes": 2` (or any number of minutes) to the JSON payload. The helper alarm keeps the MV3 service worker awake long enough to remove the tab.
+
 - Other helper routes:
 	- `/tw/repost5tw/:encodedUrl` — enqueue `repostList` (count 5)
 	- `/tw/quote5tw/:encodedUrl` — enqueue `quoteList` (count 5)
 	- `POST /enqueue` — enqueue a JSON command like `{ "action": "likeMany", "count": 3, "url": "https://x.com/.." }`
 
 - The extension polls `http://127.0.0.1:6060/next` every 2s and forwards any queued command to the existing handlers (`likeMany`, `repostList`, `quoteList`).
+
+	You can keep the temporary tab open (for debugging or to inspect the output) by adding `"keepTab": true` to any of the queued commands (`repostList`, `quoteList`, `replyList`, etc.); omit the flag or set it to `false` to let the extension remove the tab automatically once the action finishes.
 
 If the background service worker appears inactive (MV3 workers may suspend), open the included control page and keep it open — it will poll and forward commands reliably:
 

@@ -605,6 +605,9 @@ function handleRuntimeMessage(message, sender, sendResponse) {
             .catch(err => {
               const res = { error: err && err.message };
               deliverResult('repostListLastResult', 'repostListResult', res);
+            })
+            .finally(() => {
+              if (!message.keepTab) chrome.tabs.remove(tab.id).catch(() => {});
             });
         }
       });
@@ -1542,6 +1545,9 @@ function handleRuntimeMessage(message, sender, sendResponse) {
             .catch(err => {
               const res = { error: err && err.message };
               deliverResult('quoteListLastResult', 'quoteListResult', res);
+            })
+            .finally(() => {
+              if (!message.keepTab) chrome.tabs.remove(tab.id).catch(() => {});
             });
         }
       });
@@ -1832,6 +1838,9 @@ function handleRuntimeMessage(message, sender, sendResponse) {
             .catch(err => {
               const res = { error: err && err.message };
               deliverResult('replyListLastResult', 'replyListResult', res);
+            })
+            .finally(() => {
+              if (!message.keepTab) chrome.tabs.remove(tab.id).catch(() => {});
             });
         }
       });
