@@ -45,8 +45,8 @@ document.getElementById('like5').addEventListener('click', () => {
 
   const countInput = document.getElementById('count');
   const delayInput = document.getElementById('delaySeconds');
-  const count = parseInt((countInput && countInput.value), 10) || 5;
-  const delaySeconds = parseInt((delayInput && delayInput.value), 10) || 30;
+  const count = parseInt(countInput && countInput.value, 10) || 5;
+  const delaySeconds = parseInt(delayInput && delayInput.value, 10) || 30;
   chrome.runtime.sendMessage({ action: 'likeMany', count, delaySeconds }, response => {
     console.log(response.status);
   });
@@ -106,10 +106,13 @@ document.getElementById('repostList').addEventListener('click', () => {
   }, 1000);
 
   const delayInput = document.getElementById('delaySeconds');
-  const delaySeconds = parseInt((delayInput && delayInput.value), 10) || 30;
-  chrome.runtime.sendMessage({ action: 'repostList', url: listUrl, count, delaySeconds }, response => {
-    console.log(response.status);
-  });
+  const delaySeconds = parseInt(delayInput && delayInput.value, 10) || 30;
+  chrome.runtime.sendMessage(
+    { action: 'repostList', url: listUrl, count, delaySeconds },
+    response => {
+      console.log(response.status);
+    }
+  );
 });
 
 // New: Quote 5 tweets from the list with custom per-tweet messages
@@ -175,10 +178,13 @@ document.getElementById('quoteList').addEventListener('click', () => {
   }, 1000);
 
   const delayInput = document.getElementById('delaySeconds');
-  const delaySeconds = parseInt((delayInput && delayInput.value), 10) || 30;
-  chrome.runtime.sendMessage({ action: 'quoteList', url: listUrl, count, messages, delaySeconds }, response => {
-    console.log(response.status);
-  });
+  const delaySeconds = parseInt(delayInput && delayInput.value, 10) || 30;
+  chrome.runtime.sendMessage(
+    { action: 'quoteList', url: listUrl, count, messages, delaySeconds },
+    response => {
+      console.log(response.status);
+    }
+  );
 });
 
 // New: Reply 5 tweets from the list with custom per-tweet messages
@@ -242,8 +248,11 @@ document.getElementById('replyList').addEventListener('click', () => {
   }, 1000);
 
   const delayInput = document.getElementById('delaySeconds');
-  const delaySeconds = parseInt((delayInput && delayInput.value), 10) || 30;
-  chrome.runtime.sendMessage({ action: 'replyList', url: listUrl, count, messages, delaySeconds }, response => {
-    console.log(response.status);
-  });
+  const delaySeconds = parseInt(delayInput && delayInput.value, 10) || 30;
+  chrome.runtime.sendMessage(
+    { action: 'replyList', url: listUrl, count, messages, delaySeconds },
+    response => {
+      console.log(response.status);
+    }
+  );
 });

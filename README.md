@@ -52,13 +52,14 @@ curl -s -X POST http://127.0.0.1:6060/enqueue \
 - To close the tab automatically after the action finishes, add `"closeDelayMinutes": 2` (or any number of minutes) to the JSON payload. The helper alarm keeps the MV3 service worker awake long enough to remove the tab.
 
 - Other helper routes:
-	- `/tw/repost5tw/:encodedUrl` — enqueue `repostList` (count 5)
-	- `/tw/quote5tw/:encodedUrl` — enqueue `quoteList` (count 5)
-	- `POST /enqueue` — enqueue a JSON command like `{ "action": "likeMany", "count": 3, "url": "https://x.com/.." }`
+
+  - `/tw/repost5tw/:encodedUrl` — enqueue `repostList` (count 5)
+  - `/tw/quote5tw/:encodedUrl` — enqueue `quoteList` (count 5)
+  - `POST /enqueue` — enqueue a JSON command like `{ "action": "likeMany", "count": 3, "url": "https://x.com/.." }`
 
 - The extension polls `http://127.0.0.1:6060/next` every 2s and forwards any queued command to the existing handlers (`likeMany`, `repostList`, `quoteList`).
 
-	You can keep the temporary tab open (for debugging or to inspect the output) by adding `"keepTab": true` to any of the queued commands (`repostList`, `quoteList`, `replyList`, etc.); omit the flag or set it to `false` to let the extension remove the tab automatically once the action finishes.
+  You can keep the temporary tab open (for debugging or to inspect the output) by adding `"keepTab": true` to any of the queued commands (`repostList`, `quoteList`, `replyList`, etc.); omit the flag or set it to `false` to let the extension remove the tab automatically once the action finishes.
 
 If the background service worker appears inactive (MV3 workers may suspend), open the included control page and keep it open — it will poll and forward commands reliably:
 
@@ -69,9 +70,9 @@ chrome-extension://<extension-id>/control_page.html
 Replace `<extension-id>` with your unpacked extension's ID (shown on chrome://extensions after loading the unpacked folder), or open `control_page.html` from the repo in a browser tab after loading the extension.
 
 Security notes:
+
 - Only run the local server on trusted machines. The example server does not authenticate requests.
 - The extension only forwards commands it receives to internal handlers; be careful with automated actions to avoid violating site terms of service.
-
 
 ## Development
 

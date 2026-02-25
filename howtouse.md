@@ -14,11 +14,12 @@ Files of interest
 
 Quick start
 
-1) Install extension in Chrome/Edge (developer mode)
+1. Install extension in Chrome/Edge (developer mode)
+
    - Open `chrome://extensions` → enable Developer Mode → "Load unpacked" → select this repository folder.
    - Make sure the extension has necessary permissions (it uses `scripting`, `tabs`, `storage`, `activeTab`).
 
-2) Start the local command server (optional — used to queue commands from CLI or other scripts)
+2. Start the local command server (optional — used to queue commands from CLI or other scripts)
 
 ```bash
 # from the repo root
@@ -26,7 +27,7 @@ node local_command_server.js
 # default: http://127.0.0.1:6060
 ```
 
-3) Open the browser profile where the extension is installed and log in to X (https://x.com).
+3. Open the browser profile where the extension is installed and log in to X (https://x.com).
 
 Using the popup UI
 
@@ -36,6 +37,7 @@ Using the popup UI
 Using the local command server (recommended for automation)
 
 Endpoints (local server)
+
 - `POST /enqueue` — enqueue a command (JSON body).
 - `GET  /queue` — current queue.
 - `GET  /next` — pop next command (server consumer use).
@@ -111,6 +113,7 @@ curl -X POST http://127.0.0.1:6060/enqueue \
 ```
 
 What the command does (single-post flow)
+
 - Opens the specified URL in a new tab.
 - Waits for the page to load and ensures the main `article` element is rendered.
 - Checks for an element like `[data-testid="unretweet"]` or `aria-pressed="true"` to detect prior retweet/quote; if found it aborts and reports `alreadyQuoted: true`.
@@ -150,26 +153,22 @@ Install :
 npm install express
 node local_command_server.js
 
-
-
 Qoute:
 
 curl -X POST http://127.0.0.1:6060/enqueue \
-  -H 'Content-Type: application/json' \
-  -d '{"action":"quoteList","url":"https://x.com/KavehGhoreishi/status/2021520999746048145","count":1,"messages":["Nice!"]}'
+ -H 'Content-Type: application/json' \
+ -d '{"action":"quoteList","url":"https://x.com/KavehGhoreishi/status/2021520999746048145","count":1,"messages":["Nice!"]}'
 
-
-Like 
+Like
 curl -X POST http://127.0.0.1:6060/enqueue \
-  -H 'Content-Type: application/json' \
-  -d '{"action":"likeMany","url":"https://x.com/KavehGhoreishi/status/2021520999746048145","count":1,"delaySeconds":2,"keepTab":true}'
+ -H 'Content-Type: application/json' \
+ -d '{"action":"likeMany","url":"https://x.com/KavehGhoreishi/status/2021520999746048145","count":1,"delaySeconds":2,"keepTab":true}'
 You can also add `"keepTab": true` to `repostList`, `quoteList`, or `replyList` commands when you need to keep the temporary tab open for debugging; leave it out or set it to `false` to let the extension close the tab automatically.
 Repost
 
-  curl -X POST http://127.0.0.1:6060/enqueue \
-  -H 'Content-Type: application/json' \
-  -d '{"action":"repostList","url":"https://x.com/KavehGhoreishi/status/2021520999746048145","count":1,"delaySeconds":2}'
-
+curl -X POST http://127.0.0.1:6060/enqueue \
+ -H 'Content-Type: application/json' \
+ -d '{"action":"repostList","url":"https://x.com/KavehGhoreishi/status/2021520999746048145","count":1,"delaySeconds":2}'
 
 Queue and history
 

@@ -8,6 +8,7 @@
 ## Network
 
 User Settings:
+
 ```json
   "http.systemCertificatesNode": false,
   "github.copilot.advanced.debug.useElectronFetcher": true,
@@ -16,6 +17,7 @@ User Settings:
 ```
 
 Connecting to https://api.github.com:
+
 - DNS ipv4 Lookup: 20.26.156.210 (10 ms)
 - DNS ipv6 Lookup: ::ffff:20.26.156.210 (1 ms)
 - Proxy URL: None (5 ms)
@@ -24,6 +26,7 @@ Connecting to https://api.github.com:
 - Node.js fetch: HTTP 200 (40 ms)
 
 Connecting to https://api.githubcopilot.com/_ping:
+
 - DNS ipv4 Lookup: 140.82.113.22 (8 ms)
 - DNS ipv6 Lookup: ::ffff:140.82.113.22 (2 ms)
 - Proxy URL: None (0 ms)
@@ -32,6 +35,7 @@ Connecting to https://api.githubcopilot.com/_ping:
 - Node.js fetch: HTTP 200 (306 ms)
 
 Connecting to https://copilot-proxy.githubusercontent.com/_ping:
+
 - DNS ipv4 Lookup: 20.199.39.224 (8 ms)
 - DNS ipv6 Lookup: ::ffff:20.199.39.224 (2 ms)
 - Proxy URL: None (2 ms)

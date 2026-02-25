@@ -126,11 +126,11 @@
   chrome.runtime.onMessage.addListener(msg => {
     if (!msg || !msg.action) return;
     if (
-        msg.action === 'likeManyResult' ||
-        msg.action === 'repostListResult' ||
-        msg.action === 'quoteListResult' ||
-        msg.action === 'replyListResult'
-      ) {
+      msg.action === 'likeManyResult' ||
+      msg.action === 'repostListResult' ||
+      msg.action === 'quoteListResult' ||
+      msg.action === 'replyListResult'
+    ) {
       log('Result', msg.action, msg.result || msg);
     }
   });

@@ -24,7 +24,10 @@
     } catch (e) {
       console.warn('content_script: sendMessage failed', e);
       try {
-        window.postMessage({ extensionApiResponse: true, id: id, response: { error: e.message } }, '*');
+        window.postMessage(
+          { extensionApiResponse: true, id: id, response: { error: e.message } },
+          '*'
+        );
       } catch (e2) {}
     }
   });

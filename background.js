@@ -39,17 +39,19 @@ chrome.runtime.onConnect.addListener(port => {
 });
 
 // Alarm handler: wakes service worker periodically so it can perform light tasks or extend life
-chrome.alarms && chrome.alarms.onAlarm.addListener && chrome.alarms.onAlarm.addListener(alarm => {
-  try {
-    if (!alarm) return;
-    if (alarm.name === 'keepAlivePing') {
-      console.log('keepAlivePing alarm fired');
-      // no-op; the fact this handler runs means the worker was woken. Keep it short.
+chrome.alarms &&
+  chrome.alarms.onAlarm.addListener &&
+  chrome.alarms.onAlarm.addListener(alarm => {
+    try {
+      if (!alarm) return;
+      if (alarm.name === 'keepAlivePing') {
+        console.log('keepAlivePing alarm fired');
+        // no-op; the fact this handler runs means the worker was woken. Keep it short.
+      }
+    } catch (e) {
+      console.warn('alarms.onAlarm handler error:', e && e.message);
     }
-  } catch (e) {
-    console.warn('alarms.onAlarm handler error:', e && e.message);
-  }
-});
+  });
 
 // Helper to deliver results: prefer storage then runtime message; guard when storage unavailable
 function deliverResult(storageKey, messageAction, res) {
@@ -620,7 +622,7 @@ function handleRuntimeMessage(message, sender, sendResponse) {
     // Detect if this is a single specific post URL (contains /status/)
     const isSinglePost = /\/status\/\d+/i.test(listUrl);
     // For single post, force count=1; otherwise use provided count or default 5
-    const count = isSinglePost ? 1 : (message.count || 5);
+    const count = isSinglePost ? 1 : message.count || 5;
     const messages = message.messages && Array.isArray(message.messages) ? message.messages : [];
 
     chrome.tabs.create({ url: listUrl }, tab => {
@@ -641,7 +643,9 @@ function handleRuntimeMessage(message, sender, sendResponse) {
                 if (isSinglePost) {
                   // For a single post page, ONLY target the main tweet's retweet button.
                   // The main tweet is the first article on the page (replies come after).
-                  const mainArticle = document.querySelector('article[data-testid="tweet"]') || document.querySelector('article');
+                  const mainArticle =
+                    document.querySelector('article[data-testid="tweet"]') ||
+                    document.querySelector('article');
 
                   if (mainArticle) {
                     // Check for unretweet first (already retweeted/quoted)
@@ -657,7 +661,9 @@ function handleRuntimeMessage(message, sender, sendResponse) {
                       candidates.push({ el: retweet, btn, reason: 'single-post-retweet' });
                     } else {
                       // fallback: look for aria-label with retweet inside the main article
-                      const ariaEl = mainArticle.querySelector('[aria-label*="Retweet" i], [aria-label*="repost" i]');
+                      const ariaEl = mainArticle.querySelector(
+                        '[aria-label*="Retweet" i], [aria-label*="repost" i]'
+                      );
                       if (ariaEl) {
                         const btn = ariaEl.closest('div[role="button"], button') || ariaEl;
                         candidates.push({ el: ariaEl, btn, reason: 'single-post-aria' });
@@ -834,12 +840,20 @@ function handleRuntimeMessage(message, sender, sendResponse) {
                 await wait(2000 + Math.random() * 1000);
 
                 // Check if already quoted/retweeted before doing anything
-                const mainArticle = document.querySelector('article[data-testid="tweet"]') || document.querySelector('article');
+                const mainArticle =
+                  document.querySelector('article[data-testid="tweet"]') ||
+                  document.querySelector('article');
                 if (mainArticle) {
                   const unretweet = mainArticle.querySelector('[data-testid="unretweet"]');
                   if (unretweet) {
                     console.log('Single post: already retweeted/quoted — aborting');
-                    return { requested: count, quoted: 0, quotedUrls: [], alreadyQuoted: true, message: 'This post was already quoted/retweeted' };
+                    return {
+                      requested: count,
+                      quoted: 0,
+                      quotedUrls: [],
+                      alreadyQuoted: true,
+                      message: 'This post was already quoted/retweeted',
+                    };
                   }
                 }
               }
@@ -1558,7 +1572,7 @@ function handleRuntimeMessage(message, sender, sendResponse) {
   } else if (message.action === 'replyList') {
     const listUrl = message.url || 'https://x.com/i/lists/1591905950507716608';
     const isSinglePost = /\/status\/\d+/i.test(listUrl);
-    const count = isSinglePost ? 1 : (message.count || 5);
+    const count = isSinglePost ? 1 : message.count || 5;
     const messages = message.messages && Array.isArray(message.messages) ? message.messages : [];
 
     chrome.tabs.create({ url: listUrl }, tab => {
@@ -1577,14 +1591,18 @@ function handleRuntimeMessage(message, sender, sendResponse) {
                 const candidates = [];
 
                 if (isSinglePost) {
-                  const mainArticle = document.querySelector('article[data-testid="tweet"]') || document.querySelector('article');
+                  const mainArticle =
+                    document.querySelector('article[data-testid="tweet"]') ||
+                    document.querySelector('article');
                   if (mainArticle) {
                     const reply = mainArticle.querySelector('[data-testid="reply"]');
                     if (reply) {
                       const btn = reply.closest('div[role="button"], button') || reply;
                       candidates.push({ el: reply, btn, reason: 'single-post-reply' });
                     } else {
-                      const ariaEl = mainArticle.querySelector('[aria-label*="Reply" i], [aria-label*="reply" i]');
+                      const ariaEl = mainArticle.querySelector(
+                        '[aria-label*="Reply" i], [aria-label*="reply" i]'
+                      );
                       if (ariaEl) {
                         const btn = ariaEl.closest('div[role="button"], button') || ariaEl;
                         candidates.push({ el: ariaEl, btn, reason: 'single-post-aria' });
@@ -1594,16 +1612,20 @@ function handleRuntimeMessage(message, sender, sendResponse) {
                   return candidates;
                 }
 
-                Array.from(document.querySelectorAll('[data-testid="reply"], div[data-testid="reply"]')).forEach(el => {
+                Array.from(
+                  document.querySelectorAll('[data-testid="reply"], div[data-testid="reply"]')
+                ).forEach(el => {
                   const btn = el.closest('div[role="button"], button') || el;
-                  if (btn && !candidates.some(c => c.btn === btn)) candidates.push({ el, btn, reason: 'data-testid' });
+                  if (btn && !candidates.some(c => c.btn === btn))
+                    candidates.push({ el, btn, reason: 'data-testid' });
                 });
 
                 Array.from(document.querySelectorAll('[aria-label]')).forEach(el => {
                   const label = el.getAttribute('aria-label') || '';
                   if (/reply/i.test(label)) {
                     const btn = el.closest('div[role="button"], button') || el;
-                    if (btn && !candidates.some(c => c.btn === btn)) candidates.push({ el, btn, reason: 'aria-label' });
+                    if (btn && !candidates.some(c => c.btn === btn))
+                      candidates.push({ el, btn, reason: 'aria-label' });
                   }
                 });
 
@@ -1615,7 +1637,8 @@ function handleRuntimeMessage(message, sender, sendResponse) {
                 while (cur) {
                   try {
                     const a = cur.querySelector && cur.querySelector('a[href*="/status/"]');
-                    if (a && a.getAttribute) return a.href || location.origin + a.getAttribute('href');
+                    if (a && a.getAttribute)
+                      return a.href || location.origin + a.getAttribute('href');
                   } catch (e) {}
                   cur = cur.parentElement;
                 }
@@ -1694,8 +1717,17 @@ function handleRuntimeMessage(message, sender, sendResponse) {
               };
 
               const clickButtonByText = text => {
-                const nodes = Array.from(document.querySelectorAll('div[role="menuitem"], div[role="menu"] button, div[role="button"], button'));
-                const match = nodes.find(n => n.textContent && n.textContent.trim() && new RegExp('\\b' + text + '\\b', 'i').test(n.textContent.trim()));
+                const nodes = Array.from(
+                  document.querySelectorAll(
+                    'div[role="menuitem"], div[role="menu"] button, div[role="button"], button'
+                  )
+                );
+                const match = nodes.find(
+                  n =>
+                    n.textContent &&
+                    n.textContent.trim() &&
+                    new RegExp('\\b' + text + '\\b', 'i').test(n.textContent.trim())
+                );
                 if (match) {
                   match.click();
                   return true;
@@ -1741,24 +1773,40 @@ function handleRuntimeMessage(message, sender, sendResponse) {
 
                     // handle Who can reply dialog similar to quote flow
                     try {
-                      const dialogs = Array.from(document.querySelectorAll('div[role="dialog"], div[role="menu"]'));
-                      const whoDialog = dialogs.find(d => /Who can reply/i.test(d.textContent || ''));
+                      const dialogs = Array.from(
+                        document.querySelectorAll('div[role="dialog"], div[role="menu"]')
+                      );
+                      const whoDialog = dialogs.find(d =>
+                        /Who can reply/i.test(d.textContent || '')
+                      );
                       if (whoDialog) {
                         let everyoneBtn = whoDialog.querySelector('[aria-label*="Everyone" i]');
                         if (!everyoneBtn) {
-                          everyoneBtn = Array.from(whoDialog.querySelectorAll('div[role="button"], button')).find(n => /Everyone/i.test(n.textContent || n.getAttribute('aria-label') || ''));
+                          everyoneBtn = Array.from(
+                            whoDialog.querySelectorAll('div[role="button"], button')
+                          ).find(n =>
+                            /Everyone/i.test(n.textContent || n.getAttribute('aria-label') || '')
+                          );
                         }
                         if (everyoneBtn) {
-                          try { everyoneBtn.click(); } catch (e) {}
+                          try {
+                            everyoneBtn.click();
+                          } catch (e) {}
                           await wait(300 + Math.random() * 300);
                         }
-                        const doneBtn = Array.from(whoDialog.querySelectorAll('div[role="button"], button')).find(n => /Done|Apply|Close|Save|OK/i.test(n.textContent || ''));
+                        const doneBtn = Array.from(
+                          whoDialog.querySelectorAll('div[role="button"], button')
+                        ).find(n => /Done|Apply|Close|Save|OK/i.test(n.textContent || ''));
                         if (doneBtn) {
-                          try { doneBtn.click(); } catch (e) {}
+                          try {
+                            doneBtn.click();
+                          } catch (e) {}
                           await wait(200 + Math.random() * 300);
                         }
                       }
-                    } catch (e) { console.warn('Error handling Who dialog (reply):', e); }
+                    } catch (e) {
+                      console.warn('Error handling Who dialog (reply):', e);
+                    }
 
                     // post the reply
                     let posted = false;
@@ -1767,39 +1815,72 @@ function handleRuntimeMessage(message, sender, sendResponse) {
                     } catch (e) {}
                     // try Cmd/Ctrl+Enter
                     try {
-                      composer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true }));
-                      composer.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', metaKey: true, bubbles: true }));
+                      composer.dispatchEvent(
+                        new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true })
+                      );
+                      composer.dispatchEvent(
+                        new KeyboardEvent('keyup', { key: 'Enter', metaKey: true, bubbles: true })
+                      );
                       await wait(400 + Math.random() * 300);
-                      const still = document.querySelector('div[role="dialog"] [role="textbox"], div[role="textbox"][data-testid], textarea');
+                      const still = document.querySelector(
+                        'div[role="dialog"] [role="textbox"], div[role="textbox"][data-testid], textarea'
+                      );
                       if (!still) posted = true;
                     } catch (e) {}
 
                     if (!posted) {
                       try {
-                        composer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }));
-                        composer.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', ctrlKey: true, bubbles: true }));
+                        composer.dispatchEvent(
+                          new KeyboardEvent('keydown', {
+                            key: 'Enter',
+                            ctrlKey: true,
+                            bubbles: true,
+                          })
+                        );
+                        composer.dispatchEvent(
+                          new KeyboardEvent('keyup', { key: 'Enter', ctrlKey: true, bubbles: true })
+                        );
                         await wait(400 + Math.random() * 300);
-                        const still2 = document.querySelector('div[role="dialog"] [role="textbox"], div[role="textbox"][data-testid], textarea');
+                        const still2 = document.querySelector(
+                          'div[role="dialog"] [role="textbox"], div[role="textbox"][data-testid], textarea'
+                        );
                         if (!still2) posted = true;
                       } catch (e) {}
                     }
 
                     if (!posted) {
                       // try clicking Post/Tweet/Reply button
-                      const composerDialog = composer && composer.closest ? composer.closest('div[role="dialog"]') : null;
+                      const composerDialog =
+                        composer && composer.closest
+                          ? composer.closest('div[role="dialog"]')
+                          : null;
                       let postBtn = null;
                       const btnMatcher = /\b(Reply|Post|Tweet)\b/i;
                       if (composerDialog) {
-                        postBtn = Array.from(composerDialog.querySelectorAll('div[role="button"], button')).find(n => n.textContent && btnMatcher.test(n.textContent.trim()));
+                        postBtn = Array.from(
+                          composerDialog.querySelectorAll('div[role="button"], button')
+                        ).find(n => n.textContent && btnMatcher.test(n.textContent.trim()));
                       }
                       if (!postBtn) {
-                        const tweetButtons = Array.from(document.querySelectorAll('div[role="button"], button')).filter(n => n.textContent && btnMatcher.test(n.textContent.trim()));
-                        postBtn = tweetButtons.find(b => /Reply|Tweet|Post/i.test(b.textContent)) || tweetButtons[0];
+                        const tweetButtons = Array.from(
+                          document.querySelectorAll('div[role="button"], button')
+                        ).filter(n => n.textContent && btnMatcher.test(n.textContent.trim()));
+                        postBtn =
+                          tweetButtons.find(b => /Reply|Tweet|Post/i.test(b.textContent)) ||
+                          tweetButtons[0];
                       }
                       if (postBtn) {
-                        try { postBtn.click(); } catch (e) { try { postBtn.dispatchEvent(new MouseEvent('click', { bubbles: true })); } catch (e2) {} }
+                        try {
+                          postBtn.click();
+                        } catch (e) {
+                          try {
+                            postBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+                          } catch (e2) {}
+                        }
                         await wait(400 + Math.random() * 500);
-                        const still3 = document.querySelector('div[role="dialog"] [role="textbox"], div[role="textbox"][data-testid], textarea');
+                        const still3 = document.querySelector(
+                          'div[role="dialog"] [role="textbox"], div[role="textbox"][data-testid], textarea'
+                        );
                         if (!still3) posted = true;
                       }
                     }
