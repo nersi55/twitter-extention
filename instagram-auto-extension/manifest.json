@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Instagram Auto Action",
+  "version": "1.0",
+  "description": "افزونه اتوماسیون برای اینستاگرام (لایک، فالو، کامنت)",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://www.instagram.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Instagram Auto Tool"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.instagram.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ]
+}
